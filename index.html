@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SamVPN - Project Builder</title>
+    <style>
+        * { box-sizing: border-box; font-family: Tahoma, sans-serif; }
+        body { background: #0A0518; color: #F0E6FF; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 700px; background: #1A0F2E; padding: 25px; border-radius: 20px; border: 1px solid #B366FF; box-shadow: 0 0 20px rgba(179,102,255,0.3); }
+        h1 { color: #00E5FF; text-align: center; font-size: 22px; }
+        h2 { color: #B366FF; font-size: 16px; border-bottom: 1px solid #241543; padding-bottom: 5px; margin-top: 25px; }
+        label { display: block; margin: 10px 0 5px; color: #9A85B8; font-size: 13px; }
+        input, textarea { width: 100%; background: #241543; color: #F0E6FF; border: 1px solid #B366FF; padding: 10px; border-radius: 10px; font-size: 13px; font-family: monospace; }
+        textarea { height: 120px; }
+        button { width: 100%; background: linear-gradient(90deg, #B366FF, #00E5FF); color: #0A0518; border: none; padding: 15px; border-radius: 15px; font-weight: bold; font-size: 16px; margin-top: 20px; cursor: pointer; }
+        button:hover { opacity: 0.9; }
+        .status { text-align: center; margin-top: 15px; color: #66FFA6; font-size: 13px; min-height: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ SamVPN Project Builder</h1>
+        <p style="text-align:center; color:#9A85B8; font-size:12px;">
+            همه اطلاعات و فایل‌ها را وارد کن، خروجی یک فایل ZIP آماده برای گیت‌هاب است.
+        </p>
+
+        <h2>۱. نام برنامه (App Name)</h2>
+        <label>نامی که می‌خواهی روی برنامه نمایش داده شود</label>
+        <input id="appName" value="محمد سام" placeholder="مثلاً محمد سام">
+
+        <h2>۲. عکس برنامه (Icon)</h2>
+        <label>یک عکس از گالری انتخاب کن (PNG/JPG)</label>
+        <input type="file" id="iconFile" accept="image/*">
+
+        <h2>۳. کدهای ۵ تیکه (SAM-SETUP.md)</h2>
+        <label>کل کدهای ۵ تیکه را اینجا پیست کن</label>
+        <textarea id="setupMd" placeholder="کدهای ۵ تیکه (اول تا پنجم) را اینجا پیست کنید..."></textarea>
+
+        <h2>۴. فایل setup.sh</h2>
+        <label>کد اسکریپت (با #!/bin/bash شروع می‌شود)</label>
+        <textarea id="setupSh" placeholder="#!/bin/bash ..."></textarea>
+
+        <h2>۵. فایل موتور Xray (libv2ray_quantum.so)</h2>
+        <label>فایل .so یا PDF (اختیاری اما برای تونل واقعی لازم است)</label>
+        <input type="file" id="soFile" accept="*/*">
+
+        <button onclick="buildZip()">📦 ساخت فایل ZIP</button>
+        <div class="status" id="status"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        async function buildZip() {
+            const status = document.getElementById('status');
+            status.innerText = "در حال ساخت ZIP...";
+            status.style.color = "#00E5FF";
+
+            try {
+                const zip = new JSZip();
+                const setupMd = document.getElementById('setupMd').value.trim();
+                const setupSh = document.getElementById('setupSh').value.trim();
+                const soFile = document.getElementById('soFile').files[0];
+                const iconFile = document.getElementById('iconFile').files[0];
+                const appName = document.getElementById('appName').value || "محمد سام";
+
+                if (!setupMd) throw new Error("کدهای SAM-SETUP.md خالی است");
+                if (!setupSh) throw new Error("کدهای setup.sh خالی است");
+
+                // ۱. فایل‌های اصلی
+                zip.file("SAM-SETUP.md", setupMd);
+                zip.file("setup.sh", setupSh);
+
+                // ۲. ساخت پوشه‌ها
+                zip.folder("app/src/main/jniLibs/arm64-v8a/");
+                zip.folder("app/src/main/res/drawable/");
+
+                // ۳. فایل .so (اگر آپلود شد)
+                if (soFile) {
+                    const arrayBuffer = await soFile.arrayBuffer();
+                    zip.file("app/src/main/jniLibs/arm64-v8a/libv2ray_quantum.so", arrayBuffer);
+                }
+
+                // ۴. عکس برنامه (اگر آپلود شد)
+                if (iconFile) {
+                    const iconBuffer = await iconFile.arrayBuffer();
+                    zip.file("app/src/main/res/drawable/app_icon.png", iconBuffer);
+                }
+
+                // ۵. README با اطلاعات برنامه
+                zip.file("README.txt",
+`نام برنامه: ${appName}
+
+مراحل:
+۱. این فایل ZIP را در گیت‌هاب آپلود کنید.
+۲. به تب Actions بروید.
+۳. صبر کنید تا APK ساخته شود (۱۰-۱۵ دقیقه).
+۴. از بخش Artifacts، فایل app-debug.zip را دانلود کنید.
+۵. APK را روی گوشی نصب کنید.
+`);
+
+                // ۶. تولید فایل ZIP و دانلود
+                const blob = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "SamVPN-Project.zip";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                status.innerText = "✅ فایل ZIP ساخته شد و دانلود شد!";
+                status.style.color = "#66FFA6";
+            } catch (err) {
+                status.innerText = "❌ خطا: " + err.message;
+                status.style.color = "#FF5588";
+            }
+        }
+    </script>
+</body>
+</html>
